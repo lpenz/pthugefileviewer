@@ -6,7 +6,10 @@
 
 # pthugefileviewer
 
-A console regular expression editor based on python's [prompt-toolkit].
+*pthugefileviewer* is a control for [prompt-toolkit] that can display
+huge files. It does so by mmap'ing the file and only reading the lines
+shown in the screen. It avoids any operation that would require
+reading the whole file, like counting the lines.
 
 
 ## Installation

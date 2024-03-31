@@ -12,7 +12,7 @@ jobs:
     with:
       docs: false
       coveralls: true
-      publish_pypi: false
+      publish_pypi: true
       publish_github_release: true
     secrets:
       PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
