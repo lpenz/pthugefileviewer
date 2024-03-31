@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+
+[tool.mypy]
+strict = true
+scripts_are_modules = true
+files = "src, src/bin/*, tests"

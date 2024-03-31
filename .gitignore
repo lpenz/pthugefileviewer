@@ -1,0 +1,7 @@
+/.dir-locals.el
+*.egg-info/
+/venv/
+/dist/
+/.coverage
+/result
+*.cast

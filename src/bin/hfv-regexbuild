@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""
+A console regular expression editor
+"""
+
+import argparse
+import asyncio
+import logging
+import os
+import re
+from typing import Optional
+
+import pthugefileviewer
+from prompt_toolkit import Application
+from prompt_toolkit.application import get_app
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import StyleAndTextTuples
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding.bindings.focus import focus_next
+from prompt_toolkit.key_binding.key_processor import KeyPressEvent
+from prompt_toolkit.layout.containers import Container, HSplit, Window
+from prompt_toolkit.layout.controls import BufferControl
+from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.styles import Style
+from prompt_toolkit.widgets import Frame
+
+E = KeyPressEvent
+
+MAX_LINES = 1000
+
+
+class FileviewControl(pthugefileviewer.HugeFileViewerUIControl):
+    def __init__(self, filename: os.PathLike[str]) -> None:
+        self.regex: Optional[re.Pattern[bytes]] = None
+        with open(filename, "rb") as fd:
+            pthugefileviewer.HugeFileViewerUIControl.__init__(self, fd=fd)
+
+    def update_lines(self) -> None:
+        if not self.regex:
+            pthugefileviewer.HugeFileViewerUIControl.update_lines(self)
+            return
+        self._mm.seek(self._offset)
+        contents = b"\n".join(self.get_lines())
+        m = self.regex.search(contents)
+        if not m:
+            pthugefileviewer.HugeFileViewerUIControl.update_lines(self)
+            return
+        start = m.start()
+        end = m.end()
+        pre, matched, pos = contents[:start], contents[start:end], contents[end:]
+        self._lines = []
+        current: StyleAndTextTuples = []
+        lines = pre.split(b"\n")
+        for i, line in enumerate(lines):
+            current += [("class:unmatched", line.decode("utf-8"))]
+            if i != len(lines) - 1:
+                self._lines.append(current)
+                current = []
+        lines = matched.split(b"\n")
+        for i, line in enumerate(lines):
+            current += [("class:matched", line.decode("utf-8"))]
+            if i != len(lines) - 1:
+                self._lines.append(current)
+                current = []
+        lines = pos.split(b"\n")
+        for i, line in enumerate(lines):
+            current += [("class:unmatched", line.decode("utf-8"))]
+            self._lines.append(current)
+            current = []
+
+
+class Fileview:
+    def __init__(self, filename: os.PathLike[str]):
+        self.filename = filename
+        self.control = FileviewControl(filename)
+        self.window = Window(self.control)
+        self._done_event = asyncio.Event()
+        self._regex_queue: asyncio.Queue[str] = asyncio.Queue()
+        self._task = asyncio.create_task(self.loader())
+
+    def use_regex(self, regex_str: str) -> None:
+        self._regex_queue.put_nowait(regex_str)
+        if self._task.done():
+            self._task.result()
+
+    def stop(self) -> None:
+        self._task.cancel()
+
+    def update(self, regex_str: str) -> None:
+        try:
+            regex = re.compile(bytes(regex_str, "utf-8"), re.S)
+        except re.error:
+            return
+        self.control.regex = regex
+        m = self.control.re_search(regex)
+        if m:
+            self.control.go_line_offset(m.start() - 1)
+
+    async def loader(self) -> None:
+        while not self._done_event.is_set():
+            regex_str = await self._regex_queue.get()
+            while not self._regex_queue.empty():
+                regex_str = await self._regex_queue.get()
+                self._regex_queue.task_done()
+            self.update(regex_str)
+            self._regex_queue.task_done()
+
+    def get_style(self) -> str:
+        if get_app().layout.has_focus(self.window):
+            return "class:hugefilewidget"
+        else:
+            return "class:hugefilewidget.unfocused"
+
+    def __pt_container__(self) -> Container:
+        return self.window
+
+
+class RegexWindow:
+    def __init__(self, fileview: Fileview, regex_str: str = ""):
+        self.fileview = fileview
+        self.regex_str = regex_str
+        self.buffer = Buffer(
+            document=Document(text=self.regex_str),
+            multiline=True,
+            on_text_changed=self.regex_changed,
+        )
+        self.control = BufferControl(buffer=self.buffer)
+        self.window = Window(self.control)
+
+    def regex_changed(self, buf: Buffer) -> None:
+        self.fileview.use_regex(buf.document.text)
+
+    def __pt_container__(self) -> Container:
+        return self.window
+
+
+async def pthugefileviewer_run(
+    filename: os.PathLike[str], regex_str: Optional[str] = None
+) -> None:
+    fileview = Fileview(filename)
+    regexwin = RegexWindow(fileview, regex_str or "")
+    root_container = HSplit(
+        [
+            Frame(title=str(filename), body=fileview),
+            Frame(title="Regular expression", body=regexwin, height=7),
+        ]
+    )
+    layout = Layout(root_container)
+    layout.focus(regexwin)
+    style = Style.from_dict({"matched": "bold fg:white bg:green"})
+    kb = KeyBindings()
+    app: Application[None] = Application(
+        layout=layout,
+        key_bindings=kb,
+        full_screen=True,
+        style=style,
+        mouse_support=True,
+    )
+
+    @kb.add("tab")
+    def tab(event: E) -> None:
+        focus_next(event)
+
+    @kb.add("c-up")
+    def up(event: E) -> None:
+        fileview.control.go_up()
+
+    @kb.add("c-down")
+    def down(event: E) -> None:
+        fileview.control.go_down()
+
+    @kb.add("c-pageup")
+    def pageup(event: E) -> None:
+        fileview.control.go_pageup()
+
+    @kb.add("c-pagedown")
+    def pagedown(event: E) -> None:
+        fileview.control.go_pagedown()
+
+    @kb.add("c-c")
+    @kb.add("c-d")
+    @kb.add("escape", "q")
+    def close(event: E) -> None:
+        app.exit()
+
+    await app.run_async()
+
+
+async def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--regex",
+        "-e",
+        default=None,
+        help="Initial regular expression",
+    )
+    parser.add_argument(
+        "--version",
+        "-V",
+        action="version",
+        version="%(prog)s " + pthugefileviewer.version(),
+    )
+    parser.add_argument("files", type=str, nargs=1, help="Files to match the regex")
+    args = parser.parse_args()
+    logging.basicConfig(filename="log.txt", level=logging.INFO)
+    await pthugefileviewer_run(args.files[0], regex_str=args.regex)
+
+
+if __name__ == "__main__":
+    asyncio.get_event_loop().run_until_complete(main())

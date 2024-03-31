@@ -1,0 +1,18 @@
+---
+name: CI
+on: [ workflow_dispatch, push, pull_request ]
+jobs:
+  omnilint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.2
+      - uses: docker://lpenz/omnilint:0.5.2
+  python:
+    uses: lpenz/ghworkflow-python/.github/workflows/python.yml@v0.8.0
+    with:
+      docs: false
+      coveralls: true
+      publish_pypi: false
+      publish_github_release: true
+    secrets:
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
