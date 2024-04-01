@@ -4,7 +4,7 @@ import io
 import mmap
 import re
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, List, Optional
+from typing import TYPE_CHECKING, Generator, List, Optional  # noqa: I101
 
 from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings
