@@ -149,8 +149,12 @@ class HugeFileViewerUIControl(UIControl):
 
     # Exported utility functions:
 
-    def re_search(self, regex: re.Pattern[bytes]) -> Optional[re.Match[bytes]]:
-        return regex.search(bytes(self._mm))
+    def re_search(
+        self, regex: re.Pattern[bytes], offset: Optional[int] = None
+    ) -> Optional[re.Match[bytes]]:
+        offset = offset or 0
+        with self.tmp_offset():
+            return regex.search(bytes(self._mm), offset)
 
     def go_line_offset(self, offset: int) -> None:
         self.offset = offset

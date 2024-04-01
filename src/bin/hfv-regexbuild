@@ -36,6 +36,19 @@ class FileviewControl(pthugefileviewer.HugeFileViewerUIControl):
         self.regex = regex
         self.update_lines()
 
+    def search_down(self) -> None:
+        if self.regex is None:
+            return
+        with self.tmp_offset():
+            self.go_pagedown()
+            offset = self.offset
+        m = self.re_search(self.regex, offset)
+        if m:
+            self.go_line_offset(m.end())
+            self.go_up(self.height - 2)
+        else:
+            self.update_lines()
+
     def update_lines(self) -> None:
         contents = b"\n".join(self.get_lines())
         m = None
@@ -164,6 +177,10 @@ def regexbuilder_run(
     @kb.add("c-end")
     def c_end(event: E) -> None:
         fileview.control.go_bottom()
+
+    @kb.add("escape", "j")
+    def search_down(event: E) -> None:
+        fileview.control.search_down()
 
     @kb.add("c-c")
     @kb.add("c-d")
