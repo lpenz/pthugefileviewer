@@ -7,6 +7,10 @@ from typing import List
 from pthugefileviewer.hugefilevieweruicontrol import HugeFileViewerUIControl
 
 
+def tobytes(lines: List[str]) -> List[bytes]:
+    return [bytes(line, "ascii") for line in lines]
+
+
 class Base:
     def controlFor(self, height: int, contents: bytes) -> HugeFileViewerUIControl:
         with tempfile.TemporaryFile() as fd:
@@ -20,9 +24,7 @@ class Base:
         self, height: int, lines: List[str], newlines: int = 0
     ) -> HugeFileViewerUIControl:
         suffix = b"\n" * newlines
-        return self.controlFor(
-            height, b"\n".join([bytes(line, "ascii") for line in lines]) + suffix
-        )
+        return self.controlFor(height, b"\n".join(tobytes(lines)) + suffix)
 
     def controlNums(
         self, height: int, limit: int, newlines: int = 0
@@ -32,6 +34,11 @@ class Base:
 
 class TestBasic(unittest.TestCase, Base):
     newlines = 0
+
+    def test_no_lstrip(self) -> None:
+        lines = ["    after spaces"]
+        control = self.controlLines(1, lines, self.newlines)
+        self.assertEqual(control.get_lines(), tobytes(lines))
 
     def test_updown(self) -> None:
         control = self.controlNums(3, 5, self.newlines)

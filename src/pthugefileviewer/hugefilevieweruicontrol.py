@@ -89,7 +89,7 @@ class HugeFileViewerUIControl(UIControl):
                 line = self._mm.readline()
                 if not line:
                     break
-                line = line.strip()
+                line = line.rstrip()
                 lines.append(line)
             return lines
 
