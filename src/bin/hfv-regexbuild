@@ -20,6 +20,12 @@ from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.layout.containers import Container, HSplit, Window
 from prompt_toolkit.layout.controls import BufferControl
 from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.layout.processors import (
+    Processor,
+    Transformation,
+    TransformationInput,
+)
+from prompt_toolkit.layout.utils import explode_text_fragments
 from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import Frame
 
@@ -107,6 +113,32 @@ class FileviewWidget:
         return self.window
 
 
+class RegexProcessor(Processor):
+    def apply_transformation(
+        self, transformation_input: TransformationInput
+    ) -> Transformation:
+        (
+            _,
+            document,
+            _,
+            _,
+            fragments,
+            _,
+            _,
+        ) = transformation_input.unpack()
+        regex_str = document.text
+        pos = None
+        try:
+            re.compile(regex_str)
+        except re.error as e:
+            pos = e.pos
+        if pos is None:
+            return Transformation(fragments)
+        fragments = explode_text_fragments(fragments)
+        fragments[pos] = ("class:regex.error", fragments[pos][1])
+        return Transformation(fragments)
+
+
 class RegexWidget:
     def __init__(self, fileview: FileviewWidget, initial_regex_str: str = ""):
         self.fileview = fileview
@@ -116,7 +148,9 @@ class RegexWidget:
             multiline=True,
             on_text_changed=self.regex_changed,
         )
-        self.control = BufferControl(buffer=self.buffer)
+        self.control = BufferControl(
+            buffer=self.buffer, input_processors=[RegexProcessor()]
+        )
         self.window = Window(self.control)
         self.frame = Frame(
             title=[("class:title.focused", "Regular expression")], body=self, height=5
@@ -161,6 +195,7 @@ def regexbuilder_run(
             "oldmatch": "fg:gray bg:darkgreen",
             "title.focused": "reverse",
             "title.unfocused": "",
+            "regex.error": "fg:white bg:red",
         }
     )
     kb = KeyBindings()
