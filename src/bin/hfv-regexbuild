@@ -179,19 +179,27 @@ def regexbuilder_run(
         regexwidget.get_style()
 
     @kb.add("c-up")
-    def up(event: E) -> None:
+    def c_up(event: E) -> None:
         fileview.control.go_up()
 
     @kb.add("c-down")
-    def down(event: E) -> None:
+    def c_down(event: E) -> None:
         fileview.control.go_down()
 
-    @kb.add("c-pageup")
+    @kb.add("pageup")
     def pageup(event: E) -> None:
         fileview.control.go_pageup()
 
-    @kb.add("c-pagedown")
+    @kb.add("pagedown")
     def pagedown(event: E) -> None:
+        fileview.control.go_pagedown()
+
+    @kb.add("c-pageup")
+    def c_pageup(event: E) -> None:
+        fileview.control.go_pageup()
+
+    @kb.add("c-pagedown")
+    def c_pagedown(event: E) -> None:
         fileview.control.go_pagedown()
 
     @kb.add("c-home")
