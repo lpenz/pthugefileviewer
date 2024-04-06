@@ -10,6 +10,7 @@ from typing import Optional
 
 import pthugefileviewer
 from prompt_toolkit import Application
+from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import StyleAndTextTuples
@@ -91,7 +92,16 @@ class FileviewWidget:
     def __init__(self, filename: os.PathLike[str]):
         self.filename = filename
         self.control = FileviewControl(filename)
-        self.window = Window(self.control)
+        self.window = Window(self.control, style=self.get_style)
+        self.frame = Frame(body=self)
+        self.get_style()
+
+    def get_style(self) -> str:
+        if get_app().layout.has_focus(self.window):
+            self.frame.title = [("class:title.focused", str(self.filename))]
+        else:
+            self.frame.title = [("class:title.unfocused", str(self.filename))]
+        return ""
 
     def __pt_container__(self) -> Container:
         return self.window
@@ -108,7 +118,17 @@ class RegexWidget:
         )
         self.control = BufferControl(buffer=self.buffer)
         self.window = Window(self.control)
+        self.frame = Frame(
+            title=[("class:title.focused", "Regular expression")], body=self, height=5
+        )
         self.regex_changed(self.buffer)
+
+    def get_style(self) -> str:
+        if get_app().layout.has_focus(self.window):
+            self.frame.title = [("class:title.focused", "Regular expression")]
+        else:
+            self.frame.title = [("class:title.unfocused", "Regular expression")]
+        return ""
 
     def regex_changed(self, buf: Buffer) -> None:
         try:
@@ -126,19 +146,21 @@ def regexbuilder_run(
     filename: os.PathLike[str], initial_regex_str: Optional[str] = None
 ) -> None:
     fileview = FileviewWidget(filename)
-    regexwin = RegexWidget(fileview, initial_regex_str or "")
+    regexwidget = RegexWidget(fileview, initial_regex_str or "")
     root_container = HSplit(
         [
-            Frame(title=str(filename), body=fileview),
-            Frame(title="Regular expression", body=regexwin, height=5),
+            fileview.frame,
+            regexwidget.frame,
         ]
     )
     layout = Layout(root_container)
-    layout.focus(regexwin)
+    layout.focus(regexwidget.window)
     style = Style.from_dict(
         {
             "match": "bold fg:white bg:green",
             "oldmatch": "fg:gray bg:darkgreen",
+            "title.focused": "reverse",
+            "title.unfocused": "",
         }
     )
     kb = KeyBindings()
@@ -153,6 +175,8 @@ def regexbuilder_run(
     @kb.add("tab")
     def tab(event: E) -> None:
         focus_next(event)
+        fileview.get_style()
+        regexwidget.get_style()
 
     @kb.add("c-up")
     def up(event: E) -> None:
