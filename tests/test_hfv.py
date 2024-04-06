@@ -40,6 +40,10 @@ class TestBasic(unittest.TestCase, Base):
         control = self.controlLines(1, lines, self.newlines)
         self.assertEqual(control.get_lines(), tobytes(lines))
 
+    def test_too_high(self) -> None:
+        control = self.controlNums(3, 1, self.newlines)
+        self.assertEqual(control.get_lines(), [b"0"])
+
     def test_updown(self) -> None:
         control = self.controlNums(3, 5, self.newlines)
         self.assertEqual(control.get_lines(), [b"0", b"1", b"2"])

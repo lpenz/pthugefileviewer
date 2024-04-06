@@ -97,7 +97,7 @@ class HugeFileViewerUIControl(UIControl):
         self._lines = [
             [("", line.decode("utf-8", errors="replace"))] for line in self.get_lines()
         ]
-        if self.height > len(self._lines):
+        if self.height > len(self._lines) and self.offset < self._offset_max:
             self.go_up(self._height - len(self._lines))
 
     def get_char(self, offset: Optional[int] = None) -> bytes:
