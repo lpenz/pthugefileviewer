@@ -4,6 +4,7 @@ A console regular expression builder
 """
 
 import argparse
+import itertools
 import os
 import re
 from typing import Optional
@@ -18,7 +19,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.bindings.focus import focus_next
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.layout.containers import Container, HSplit, Window
-from prompt_toolkit.layout.controls import BufferControl
+from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.layout.processors import (
     Processor,
@@ -140,8 +141,14 @@ class RegexProcessor(Processor):
 
 
 class RegexWidget:
-    def __init__(self, fileview: FileviewWidget, initial_regex_str: str = ""):
+    def __init__(
+        self,
+        fileview: FileviewWidget,
+        statuswidget: "StatusWidget",
+        initial_regex_str: str = "",
+    ):
         self.fileview = fileview
+        self.statuswidget = statuswidget
         self.regex_str = initial_regex_str
         self.buffer = Buffer(
             document=Document(text=self.regex_str),
@@ -167,24 +174,59 @@ class RegexWidget:
     def regex_changed(self, buf: Buffer) -> None:
         try:
             regex = re.compile(bytes(buf.document.text, "utf-8"), re.S)
-        except re.error:
+        except re.error as e:
             self.fileview.control.use_regex(None)
+            self.statuswidget.error(e.msg)
             return
+        self.statuswidget.reset()
         self.fileview.control.use_regex(regex)
 
     def __pt_container__(self) -> Container:
         return self.window
 
 
+class StatusWidget:
+    def __init__(self) -> None:
+        self.default: StyleAndTextTuples = list(
+            itertools.chain.from_iterable(
+                [
+                    ("class:status.key", f"{key} "),
+                    ("class:status.descr", f"{descr}    "),
+                ]
+                for key, descr in [
+                    (" TAB", "switch panes"),
+                    ("F3", "search next"),
+                    ("^Up", ""),
+                    ("^Dn", ""),
+                    ("^PgUp", ""),
+                    ("^PgDn", ""),
+                    ("^D", "exit"),
+                ]
+            )
+        )
+        self.control = FormattedTextControl(text=self.default)
+        self.window = Window(self.control, height=1, style="class:status.ok")
+
+    def error(self, msg: str) -> None:
+        self.window.style = "class:status.error"
+        self.control.text = f" Regex error: {msg}"
+
+    def reset(self) -> None:
+        self.window.style = "class:status.ok"
+        self.control.text = self.default
+
+
 def regexbuilder_run(
     filename: os.PathLike[str], initial_regex_str: Optional[str] = None
 ) -> None:
+    statuswidget = StatusWidget()
     fileview = FileviewWidget(filename)
-    regexwidget = RegexWidget(fileview, initial_regex_str or "")
+    regexwidget = RegexWidget(fileview, statuswidget, initial_regex_str or "")
     root_container = HSplit(
         [
             fileview.frame,
             regexwidget.frame,
+            statuswidget.window,
         ]
     )
     layout = Layout(root_container)
@@ -196,6 +238,10 @@ def regexbuilder_run(
             "title.focused": "reverse",
             "title.unfocused": "",
             "regex.error": "fg:white bg:red",
+            "status.ok": "bg:#222222",
+            "status.key": "fg:white",
+            "status.descr": "fg:gray",
+            "status.error": "bg:red fg:white bold",
         }
     )
     kb = KeyBindings()
