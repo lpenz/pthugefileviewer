@@ -291,7 +291,7 @@ def regexbuilder_run(
     def c_end(event: E) -> None:
         fileview.control.go_bottom()
 
-    @kb.add("escape", "j")
+    @kb.add("f3")
     def search_down(event: E) -> None:
         fileview.control.search_down()
 
