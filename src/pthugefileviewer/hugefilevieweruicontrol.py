@@ -4,7 +4,7 @@ import io
 import mmap
 import re
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, List, Optional  # noqa: I101
+from typing import TYPE_CHECKING, Generator, Iterator, List, Optional  # noqa: I101
 
 from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings
@@ -46,6 +46,7 @@ class HugeFileViewerUIControl(UIControl):
             offset = 0
         if offset >= self._offset_max:
             self._offset = self._offset_max
+        assert offset == 0 or self.get_char(offset - 1) == b"\n"
         self._mm.seek(offset)
         self.update_lines()
 
@@ -82,16 +83,13 @@ class HugeFileViewerUIControl(UIControl):
         start_offset = (self._size % mmap.PAGESIZE) - 2 * mmap.PAGESIZE
         return self._mm.rfind(b"\n", max(0, start_offset), offset)
 
-    def get_lines(self) -> List[bytes]:
+    def get_lines(self) -> Iterator[bytes]:
         with self.tmp_offset():
-            lines = []
             for _ in range(self._height):
                 line = self._mm.readline()
                 if not line:
                     break
-                line = line.rstrip()
-                lines.append(line)
-            return lines
+                yield line.rstrip()
 
     def update_lines(self) -> None:
         self._lines = [
@@ -103,7 +101,7 @@ class HugeFileViewerUIControl(UIControl):
     def get_char(self, offset: Optional[int] = None) -> bytes:
         with self.tmp_offset():
             if offset is not None:
-                self.offset = offset
+                self._mm.seek(offset)
             return self._mm.read(1)
 
     # Implement UIControl methods:
