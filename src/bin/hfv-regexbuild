@@ -33,66 +33,10 @@ from prompt_toolkit.widgets import Frame
 E = KeyPressEvent
 
 
-class FileviewControl(pthugefileviewer.HugeFileViewerUIControl):
+class FileviewControl(pthugefileviewer.HugeFileViewerRegexUIControl):
     def __init__(self, filename: os.PathLike[str]) -> None:
-        self.regex: Optional[re.Pattern[bytes]] = None
-        self.regex_ok: Optional[re.Pattern[bytes]] = None
         with open(filename, "rb") as fd:
-            pthugefileviewer.HugeFileViewerUIControl.__init__(self, fd=fd)
-
-    def use_regex(self, regex: Optional[re.Pattern[bytes]]) -> None:
-        self.regex = regex
-        self.update_lines()
-
-    def search_down(self) -> None:
-        if self.regex is None:
-            return
-        with self.tmp_offset():
-            self.go_pagedown()
-            offset = self.offset
-        m = self.re_search(self.regex, offset)
-        if m:
-            self.go_line_offset(m.end())
-            self.go_up(self.height - 2)
-        else:
-            self.update_lines()
-
-    def update_lines(self) -> None:
-        contents = b"\n".join(self.get_lines())
-        m = None
-        if self.regex is not None:
-            m = self.regex.search(contents)
-        if m:
-            self.regex_ok = self.regex
-            style = "class:match"
-        elif not m and self.regex_ok is not None:
-            m = self.regex_ok.search(contents)
-            style = "class:oldmatch"
-        if not m:
-            pthugefileviewer.HugeFileViewerUIControl.update_lines(self)
-            return
-        start = m.start()
-        end = m.end()
-        pre, matched, pos = contents[:start], contents[start:end], contents[end:]
-        self._lines = []
-        current: StyleAndTextTuples = []
-        lines = pre.split(b"\n")
-        for i, line in enumerate(lines):
-            current += [("", line.decode("utf-8"))]
-            if i != len(lines) - 1:
-                self._lines.append(current)
-                current = []
-        lines = matched.split(b"\n")
-        for i, line in enumerate(lines):
-            current += [(style, line.decode("utf-8"))]
-            if i != len(lines) - 1:
-                self._lines.append(current)
-                current = []
-        lines = pos.split(b"\n")
-        for i, line in enumerate(lines):
-            current += [("", line.decode("utf-8"))]
-            self._lines.append(current)
-            current = []
+            pthugefileviewer.HugeFileViewerRegexUIControl.__init__(self, fd=fd)
 
 
 class FileviewWidget:

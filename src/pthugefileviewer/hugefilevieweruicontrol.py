@@ -46,7 +46,9 @@ class HugeFileViewerUIControl(UIControl):
             offset = 0
         if offset >= self._offset_max:
             self._offset = self._offset_max
-        assert offset == 0 or self.get_char(offset - 1) == b"\n"
+        assert (
+            offset == 0 or self.get_char(offset - 1) == b"\n"
+        ), f"offset {offset} char {self.get_char(offset - 1)!r}"
         self._mm.seek(offset)
         self.update_lines()
 
@@ -147,16 +149,9 @@ class HugeFileViewerUIControl(UIControl):
 
     # Exported utility functions:
 
-    def re_search(
-        self, regex: re.Pattern[bytes], offset: Optional[int] = None
-    ) -> Optional[re.Match[bytes]]:
-        offset = offset or 0
-        with self.tmp_offset():
-            return regex.search(bytes(self._mm), offset)
-
     def go_line_offset(self, offset: int) -> None:
-        self.offset = offset
-        if self.get_char(offset - 1) == b"\n":
+        if offset == 0 or self.get_char(offset - 1) == b"\n":
+            self.offset = offset
             return
         offset = self.find_prev_newline(offset)
         if offset != -1:
@@ -199,3 +194,71 @@ class HugeFileViewerUIControl(UIControl):
 
     def go_pagedown(self) -> None:
         self.go_down(self.height)
+
+
+class HugeFileViewerRegexUIControl(HugeFileViewerUIControl):
+    def __init__(self, fd: io.BufferedReader):
+        self.regex: Optional[re.Pattern[bytes]] = None
+        self.regex_ok: Optional[re.Pattern[bytes]] = None
+        HugeFileViewerUIControl.__init__(self, fd)
+
+    def re_search(
+        self, regex: re.Pattern[bytes], offset: Optional[int] = None
+    ) -> Optional[re.Match[bytes]]:
+        offset = offset or 0
+        with self.tmp_offset():
+            return regex.search(bytes(self._mm), offset)
+
+    def use_regex(self, regex: Optional[re.Pattern[bytes]]) -> None:
+        self.regex = regex
+        self.update_lines()
+
+    def search_down(self) -> None:
+        if self.regex is None:
+            return
+        with self.tmp_offset():
+            self.go_pagedown()
+            offset = self.offset
+        m = self.re_search(self.regex, offset)
+        if m:
+            self.go_line_offset(m.end())
+            self.go_down(1)
+        else:
+            self.update_lines()
+
+    def update_lines(self) -> None:
+        contents = b"\n".join(self.get_lines())
+        m = None
+        if self.regex is not None:
+            m = self.regex.search(contents)
+        if m:
+            self.regex_ok = self.regex
+            style = "class:match"
+        elif not m and self.regex_ok is not None:
+            m = self.regex_ok.search(contents)
+            style = "class:oldmatch"
+        if not m:
+            HugeFileViewerUIControl.update_lines(self)
+            return
+        start = m.start()
+        end = m.end()
+        pre, matched, pos = contents[:start], contents[start:end], contents[end:]
+        self._lines = []
+        current: StyleAndTextTuples = []
+        lines = pre.split(b"\n")
+        for i, line in enumerate(lines):
+            current += [("", line.decode("utf-8"))]
+            if i != len(lines) - 1:
+                self._lines.append(current)
+                current = []
+        lines = matched.split(b"\n")
+        for i, line in enumerate(lines):
+            current += [(style, line.decode("utf-8"))]
+            if i != len(lines) - 1:
+                self._lines.append(current)
+                current = []
+        lines = pos.split(b"\n")
+        for i, line in enumerate(lines):
+            current += [("", line.decode("utf-8"))]
+            self._lines.append(current)
+            current = []

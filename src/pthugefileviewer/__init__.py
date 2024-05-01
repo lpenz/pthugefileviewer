@@ -2,7 +2,10 @@
 
 import importlib.metadata
 
-from .hugefilevieweruicontrol import HugeFileViewerUIControl
+from .hugefilevieweruicontrol import (
+    HugeFileViewerRegexUIControl,
+    HugeFileViewerUIControl,
+)
 
 
 def version() -> str:
@@ -12,4 +15,5 @@ def version() -> str:
 __all__ = [
     "version",
     "HugeFileViewerUIControl",
+    "HugeFileViewerRegexUIControl",
 ]
