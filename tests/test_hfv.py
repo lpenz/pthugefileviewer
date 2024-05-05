@@ -168,7 +168,7 @@ class TestGap(unittest.TestCase, Base):
         self.assertEqual(get_lines(control), [b"4", b"5", b"6"])
 
 
-class TestGapNewlineAtEnd(unittest.TestCase, Base):
+class TestGapNewlineAtEnd(TestGap):
     newlines = 1
 
 
