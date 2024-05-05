@@ -1,4 +1,4 @@
-"""hugefilevieweruicontrol tests"""
+"""HugeFileViewerUIControl tests"""
 
 import tempfile
 import unittest
@@ -47,6 +47,12 @@ class TestBasic(unittest.TestCase, Base):
     def test_too_high(self) -> None:
         control = self.controlNums(3, 1, self.newlines)
         self.assertEqual(get_lines(control), [b"0"])
+
+    def test_linestyle(self) -> None:
+        control = self.controlNums(3, 5, self.newlines)
+        self.assertEqual(
+            control.get_lines_style(), [[("", "0")], [("", "1")], [("", "2")]]
+        )
 
     def test_updown(self) -> None:
         control = self.controlNums(3, 5, self.newlines)

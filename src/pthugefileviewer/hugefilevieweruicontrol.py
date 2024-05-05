@@ -4,6 +4,7 @@ import io
 import mmap
 import re
 from contextlib import contextmanager
+from enum import Enum
 from typing import TYPE_CHECKING, Generator, Iterator, List, Optional  # noqa: I101
 
 from prompt_toolkit.formatted_text import StyleAndTextTuples
@@ -93,10 +94,13 @@ class HugeFileViewerUIControl(UIControl):
                     break
                 yield line.rstrip()
 
-    def update_lines(self) -> None:
-        self._lines = [
+    def get_lines_style(self) -> List[StyleAndTextTuples]:
+        return [
             [("", line.decode("utf-8", errors="replace"))] for line in self.get_lines()
         ]
+
+    def update_lines(self) -> None:
+        self._lines = self.get_lines_style()
         if self.height > len(self._lines) and self.offset < self._offset_max:
             self.go_up(self._height - len(self._lines))
 
@@ -196,6 +200,9 @@ class HugeFileViewerUIControl(UIControl):
         self.go_down(self.height)
 
 
+OffsetType = Enum("OffsetType", ["RE_START", "RE_END", "NEWLINE", "END"])
+
+
 class HugeFileViewerRegexUIControl(HugeFileViewerUIControl):
     def __init__(self, fd: io.BufferedReader):
         self.regex: Optional[re.Pattern[bytes]] = None
@@ -226,39 +233,48 @@ class HugeFileViewerRegexUIControl(HugeFileViewerUIControl):
         else:
             self.update_lines()
 
-    def update_lines(self) -> None:
+    def get_lines_style(self) -> List[StyleAndTextTuples]:
         contents = b"\n".join(self.get_lines())
         m = None
         if self.regex is not None:
             m = self.regex.search(contents)
         if m:
             self.regex_ok = self.regex
-            style = "class:match"
+            re_style = "class:match"
         elif not m and self.regex_ok is not None:
             m = self.regex_ok.search(contents)
-            style = "class:oldmatch"
+            re_style = "class:oldmatch"
+        else:
+            re_style = ""
         if not m:
-            HugeFileViewerUIControl.update_lines(self)
-            return
-        start = m.start()
-        end = m.end()
-        pre, matched, pos = contents[:start], contents[start:end], contents[end:]
-        self._lines = []
+            return HugeFileViewerUIControl.get_lines_style(self)
+        offsets = [(m.start(), OffsetType.RE_START), (m.end(), OffsetType.RE_END)]
+        o = 0
+        while (newline := contents.find(b"\n", o)) != -1:
+            offsets.append((newline, OffsetType.NEWLINE))
+            o = newline + 1
+        offsets.append((len(contents), OffsetType.END))
+        offsets.sort(key=lambda x: x[0])
+        linestyle = []
         current: StyleAndTextTuples = []
-        lines = pre.split(b"\n")
-        for i, line in enumerate(lines):
-            current += [("", line.decode("utf-8"))]
-            if i != len(lines) - 1:
-                self._lines.append(current)
+        styles: set[str] = set()
+        o_curr = 0
+        for o_next, what in offsets:
+            if o_next > o_curr:
+                current.append(
+                    (" ".join(styles), contents[o_curr:o_next].decode("utf-8"))
+                )
+            if what == OffsetType.RE_START:
+                styles.add(re_style)
+                o_curr = o_next
+            elif what == OffsetType.RE_END:
+                styles.remove(re_style)
+                o_curr = o_next
+            elif what == OffsetType.NEWLINE:
+                linestyle.append(current)
                 current = []
-        lines = matched.split(b"\n")
-        for i, line in enumerate(lines):
-            current += [(style, line.decode("utf-8"))]
-            if i != len(lines) - 1:
-                self._lines.append(current)
+                o_curr = o_next + 1
+            elif what == OffsetType.END:
+                linestyle.append(current)
                 current = []
-        lines = pos.split(b"\n")
-        for i, line in enumerate(lines):
-            current += [("", line.decode("utf-8"))]
-            self._lines.append(current)
-            current = []
+        return linestyle
