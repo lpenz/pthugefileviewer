@@ -117,3 +117,36 @@ class TestBasic(unittest.TestCase, Base):
             control.get_lines_style(),
             [[("", "ab"), ("class:match", "c")], [("class:match", "d"), ("", "ef")]],
         )
+
+    def test_matchall_multi(self) -> None:
+        control = self.controlLines(2, ["abc", "def", "ghi"], 0)
+        control.use_regex(re.compile(b"[be]"))
+        self.assertEqual(
+            control.get_lines_style(),
+            [
+                [("", "a"), ("class:match", "b"), ("", "c")],
+                [("", "d"), ("class:match", "e"), ("", "f")],
+            ],
+        )
+
+    def test_matchall_multi2(self) -> None:
+        control = self.controlLines(2, ["abc", "def", "ghi"], 0)
+        control.use_regex(re.compile(b"[bcde]"))
+        self.assertEqual(
+            control.get_lines_style(),
+            [
+                [("", "a"), ("class:match", "bc")],
+                [("class:match", "de"), ("", "f")],
+            ],
+        )
+
+    def test_matchall_multi3(self) -> None:
+        control = self.controlLines(2, ["abc", "def", "ghi"], 0)
+        control.use_regex(re.compile(b"bc.?de", re.DOTALL))
+        self.assertEqual(
+            control.get_lines_style(),
+            [
+                [("", "a"), ("class:match", "bc")],
+                [("class:match", "de"), ("", "f")],
+            ],
+        )

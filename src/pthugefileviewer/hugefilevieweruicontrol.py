@@ -200,7 +200,7 @@ class HugeFileViewerUIControl(UIControl):
         self.go_down(self.height)
 
 
-OffsetType = Enum("OffsetType", ["RE_START", "RE_END", "NEWLINE", "END"])
+OffsetEvent = Enum("OffsetEvent", ["RE_START", "RE_END", "NEWLINE", "END"])
 
 
 class HugeFileViewerRegexUIControl(HugeFileViewerUIControl):
@@ -235,46 +235,53 @@ class HugeFileViewerRegexUIControl(HugeFileViewerUIControl):
 
     def get_lines_style(self) -> List[StyleAndTextTuples]:
         contents = b"\n".join(self.get_lines())
-        m = None
+        matches = []
         if self.regex is not None:
-            m = self.regex.search(contents)
-        if m:
+            matches = list(self.regex.finditer(contents))
+        if matches:
             self.regex_ok = self.regex
             re_style = "class:match"
-        elif not m and self.regex_ok is not None:
-            m = self.regex_ok.search(contents)
+        elif not matches and self.regex_ok is not None:
+            matches = list(self.regex_ok.finditer(contents))
             re_style = "class:oldmatch"
         else:
             re_style = ""
-        if not m:
-            return HugeFileViewerUIControl.get_lines_style(self)
-        offsets = [(m.start(), OffsetType.RE_START), (m.end(), OffsetType.RE_END)]
+        offsetList = []
+        for m in matches:
+            offsetList.append((m.start(), OffsetEvent.RE_START))
+            offsetList.append((m.end(), OffsetEvent.RE_END))
         o = 0
         while (newline := contents.find(b"\n", o)) != -1:
-            offsets.append((newline, OffsetType.NEWLINE))
+            offsetList.append((newline, OffsetEvent.NEWLINE))
             o = newline + 1
-        offsets.append((len(contents), OffsetType.END))
-        offsets.sort(key=lambda x: x[0])
+        offsetList.append((len(contents), OffsetEvent.END))
+        offsetList.sort(key=lambda x: x[0])
+        offsets: dict[int, set[OffsetEvent]] = {}
+        for offset, what in offsetList:
+            events = offsets.setdefault(offset, set())
+            events.add(what)
+            if OffsetEvent.RE_START in events and OffsetEvent.RE_END in events:
+                events.remove(OffsetEvent.RE_START)
+                events.remove(OffsetEvent.RE_END)
+            if not events:
+                offsets.pop(offset)
         linestyle = []
         current: StyleAndTextTuples = []
         styles: set[str] = set()
         o_curr = 0
-        for o_next, what in offsets:
+        for o_next, events in offsets.items():
             if o_next > o_curr:
                 current.append(
                     (" ".join(styles), contents[o_curr:o_next].decode("utf-8"))
                 )
-            if what == OffsetType.RE_START:
+            if OffsetEvent.RE_START in events:
                 styles.add(re_style)
                 o_curr = o_next
-            elif what == OffsetType.RE_END:
+            if OffsetEvent.RE_END in events:
                 styles.remove(re_style)
                 o_curr = o_next
-            elif what == OffsetType.NEWLINE:
+            if OffsetEvent.NEWLINE in events or OffsetEvent.END in events:
                 linestyle.append(current)
                 current = []
                 o_curr = o_next + 1
-            elif what == OffsetType.END:
-                linestyle.append(current)
-                current = []
         return linestyle
